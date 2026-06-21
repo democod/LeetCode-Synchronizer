@@ -116,7 +116,7 @@ def sync_github(commits, submissions):
                 ext = "php"
             elif submission["language"] == "Python":
                 ext = "py"
-            elif submission["language"] == "TypeScript":
+            elif submission["language"].lower() in ["typescript", "ts"]:
                 ext = "ts"
             else:
                 # Fallback instead of crashing the program, but it may cause some issues with syntax highlighting in GitHub
