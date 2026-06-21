@@ -34,7 +34,7 @@ Here's a sample repository created using LeetCode Synchronizer: [leetcode-synchr
    - Open `Settings > Actions > General` from the repository
    - Select `Read and write permissions` from `Workflow permissions` and save
 
-5. Create [GithHub Action](https://docs.github.com/en/actions/quickstart)
+5. Create [GitHub Action](https://docs.github.com/en/actions/quickstart)
 
    - Create a workflow directory `.github/workflows/`
    - Create a workflow file, e.g., `leetcode_synchronizer.yml`
