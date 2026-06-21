@@ -69,6 +69,7 @@ Here's a sample repository created using LeetCode Synchronizer: [leetcode-synchr
 This fork extends the original implementation by adding:
 
 - JavaScript submission support
+- TypeScript submission support
 - PHP submission support
 - Java submission support
 - Python submission support
