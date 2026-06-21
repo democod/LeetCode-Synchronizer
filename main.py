@@ -108,8 +108,17 @@ def sync_github(commits, submissions):
                 ext = "sql"
             elif submission["language"] == "Bash":
                 ext = "sh"
+            elif submission["language"] in ["JavaScript", "JavaScript (Node.js)"]:
+                ext = "js"
+            elif submission["language"] == "Java":
+                ext = "java"
+            elif submission["language"] == "PHP":
+                ext = "php"
+            elif submission["language"] == "Python":
+                ext = "py"
             else:
-                raise Exception(f"Unknown language : {submission['language']}")
+                # Fallback instead of crashing the program, but it may cause some issues with syntax highlighting in GitHub
+                ext = submission["language"].lower().replace(" ", "")
 
             pathlib.Path(f"problems/{dir_name}").mkdir(parents=True, exist_ok=True)
             with open(f"problems/{dir_name}/{dir_name}.{ext}", "wt") as fd:
