@@ -101,26 +101,45 @@ def sync_github(commits, submissions):
     for submission in submissions:
         commit_message = f"LeetCode Synchronization - {submission['title']} ({submission['language']})"
         if commit_message not in commits or commits[commit_message] < submission["timestamp"]:
+
             dir_name = f"{str(submission['id']).zfill(4)}-{submission['title_slug']}"
-            if submission["language"] == "C++":
+
+            language = submission["language"].lower().strip()
+
+            if "c++" in language or "cpp" in language:
                 ext = "cpp"
-            elif submission["language"] == "MySQL":
+            elif "mysql" in language or "sql" in language:
                 ext = "sql"
-            elif submission["language"] == "Bash":
+            elif "bash" in language:
                 ext = "sh"
-            elif submission["language"] in ["JavaScript", "JavaScript (Node.js)"]:
+            elif "javascript" in language or "node.js" in language:
                 ext = "js"
-            elif submission["language"] == "Java":
+            elif "java" in language:
                 ext = "java"
-            elif submission["language"] == "PHP":
+            elif "php" in language:
                 ext = "php"
-            elif submission["language"] == "Python":
+            elif "python" in language:
                 ext = "py"
-            elif submission["language"].lower() in ["typescript", "ts"]:
+            elif "typescript" in language or "ts" in language:
                 ext = "ts"
             else:
-                # Fallback instead of crashing the program, but it may cause some issues with syntax highlighting in GitHub
-                ext = submission["language"].lower().replace(" ", "")
+                if "c#" in language or "csharp" in language:
+                    ext = "cs"
+                elif "ruby" in language:
+                    ext = "rb"
+                elif "go" in language:
+                    ext = "go"
+                elif "rust" in language:
+                    ext = "rs"
+                elif "scala" in language:
+                    ext = "scala"
+                elif "kotlin" in language:
+                    ext = "kt"
+                elif "swift" in language:
+                    ext = "swift"
+                else:
+                    # Remove spaces and special characters to create a secure extension
+                    ext = "".join(c for c in language if c.isalnum())
 
             pathlib.Path(f"problems/{dir_name}").mkdir(parents=True, exist_ok=True)
             with open(f"problems/{dir_name}/{dir_name}.{ext}", "wt") as fd:
