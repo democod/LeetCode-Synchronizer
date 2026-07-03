@@ -1,13 +1,34 @@
+#!/usr/bin/env python3
+
 import os
 import time
 import json
 import pathlib
+import random
 import requests
 import datetime
 import email.utils
 import urllib.parse
 from git import Repo
 import leetcode_query
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+]
+
+
+def get_headers(title_slug):
+    return {
+        "User-Agent": random.choice(USER_AGENTS),  # random from the list
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+        "Referer": f"https://leetcode.com/problems/{title_slug}/",
+        "Upgrade-Insecure-Requests": "1",
+    }
 
 
 def parse_git_log():
@@ -20,49 +41,89 @@ def parse_git_log():
 
 
 def scrape_leetcode():
+    print("[DEBUG] Starting scrape_leetcode()...", flush=True)
+
+    # 1. check for environment variables
+    leetcode_session = os.environ.get("LEETCODE_SESSION")
+    csrf_token = os.environ.get("LEETCODE_CSRF_TOKEN")
+
+    if not leetcode_session or not csrf_token:
+        print("[ERROR] Missing LEETCODE_SESSION or LEETCODE_CSRF_TOKEN", flush=True)
+        return []
+
+    print(f"[DEBUG] Session token present (length: {len(leetcode_session)})", flush=True)
+    print(f"[DEBUG] CSRF token present (length: {len(csrf_token)})", flush=True)
+
+    # 2. create a session and set cookies
     session = requests.Session()
-    session.cookies.set("LEETCODE_SESSION", os.environ.get("LEETCODE_SESSION"), domain="leetcode.com")
-    session.cookies.set("csrftoken", os.environ.get("LEETCODE_CSRF_TOKEN"), domain="leetcode.com")
+    session.cookies.set("LEETCODE_SESSION", leetcode_session, domain="leetcode.com")
+    session.cookies.set("csrftoken", csrf_token, domain="leetcode.com")
 
     solved_problems = list()
-    all_problems = session.get("https://leetcode.com/api/problems/all/").json()
+
+    # 3. API request (with timeout)
+    print("[DEBUG] Fetching problems from LeetCode API...", flush=True)
+    try:
+        all_problems = session.get("https://leetcode.com/api/problems/all/", timeout=30).json()
+        print(f"[DEBUG] Successfully loaded problems. Total entries: {len(all_problems.get('stat_status_pairs', []))}",
+              flush=True)
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch problems: {e}", flush=True)
+        return []
+
+    # 4. Task list processing
+    problem_counter = 0
     for problem in all_problems["stat_status_pairs"]:
         if problem["status"] == "ac":
-            time.sleep(1)
+            problem_counter += 1
+            print(f"[DEBUG] Processing accepted problem #{problem_counter}...", flush=True)
 
             title_slug = problem["stat"]["question__title_slug"]
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36",
-                "Connection": "keep-alive",
-                "Content-Type": "application/json",
-                "Referer": "https://leetcode.com/problems/" + title_slug,
-            }
+            headers = get_headers(title_slug)
 
-            json_data = leetcode_query.question_detail
-            json_data["variables"]["titleSlug"] = title_slug
-            question_details = session.post("https://leetcode.com/graphql", json=json_data, headers=headers, timeout=10).json()
+            # Internal requests (with timeout)
+            try:
+                json_data = leetcode_query.question_detail
+                json_data["variables"]["titleSlug"] = title_slug
+                question_details = session.post("https://leetcode.com/graphql", json=json_data, headers=headers,
+                                                timeout=30).json()
 
-            json_data = leetcode_query.submission_list
-            json_data["variables"]["questionSlug"] = title_slug
-            submissions = session.post("https://leetcode.com/graphql", json=json_data, headers=headers, timeout=10).json()
+                json_data = leetcode_query.submission_list
+                json_data["variables"]["questionSlug"] = title_slug
+                submissions = session.post("https://leetcode.com/graphql", json=json_data, headers=headers,
+                                           timeout=30).json()
 
-            json_data = leetcode_query.submission_details
-            json_data["variables"]["submissionId"] = submissions["data"]["questionSubmissionList"]["submissions"][0]["id"]
-            submission_details = session.post("https://leetcode.com/graphql", json=json_data, headers=headers, timeout=10).json()
+                # check if there are submissions
+                if not submissions.get("data", {}).get("questionSubmissionList", {}).get("submissions"):
+                    print(f"[WARNING] No submissions found for {title_slug}. Skipping.", flush=True)
+                    continue
 
-            problem_info = {
-                "id": int(problem["stat"]["frontend_question_id"]),
-                "title": problem["stat"]["question__title"],
-                "title_slug": title_slug,
-                "content": question_details["data"]["question"]["content"],
-                "difficulty": question_details["data"]["question"]["difficulty"],
-                "skills": [tag["name"] for tag in question_details["data"]["question"]["topicTags"]],
-                "timestamp": int(submissions["data"]["questionSubmissionList"]["submissions"][0]["timestamp"]),
-                "language": submissions["data"]["questionSubmissionList"]["submissions"][0]["langName"],
-                "code": submission_details["data"]["submissionDetails"]["code"],
-            }
-            solved_problems.append(problem_info)
+                json_data = leetcode_query.submission_details
+                json_data["variables"]["submissionId"] = \
+                    submissions["data"]["questionSubmissionList"]["submissions"][0]["id"]
+                submission_details = session.post("https://leetcode.com/graphql", json=json_data, headers=headers,
+                                                  timeout=30).json()
 
+                problem_info = {
+                    "id": int(problem["stat"]["frontend_question_id"]),
+                    "title": problem["stat"]["question__title"],
+                    "title_slug": title_slug,
+                    "content": question_details["data"]["question"]["content"],
+                    "difficulty": question_details["data"]["question"]["difficulty"],
+                    "skills": [tag["name"] for tag in question_details["data"]["question"]["topicTags"]],
+                    "timestamp": int(submissions["data"]["questionSubmissionList"]["submissions"][0]["timestamp"]),
+                    "language": submissions["data"]["questionSubmissionList"]["submissions"][0]["langName"],
+                    "code": submission_details["data"]["submissionDetails"]["code"],
+                }
+                solved_problems.append(problem_info)
+
+            except Exception as e:
+                print(f"[ERROR] Failed processing {title_slug}: {e}", flush=True)
+                continue
+
+            time.sleep(1)  # leaving a pause between tasks
+
+    print(f"[DEBUG] Finished processing. Total problems solved: {len(solved_problems)}", flush=True)
     return sorted(solved_problems, key=lambda entry: entry["timestamp"])
 
 
