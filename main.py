@@ -236,7 +236,9 @@ def sync_github(commits, submissions):
             iso_datetime = email.utils.format_datetime(datetime.datetime.fromtimestamp(submission["timestamp"]))
             os.environ["GIT_AUTHOR_DATE"] = iso_datetime
             os.environ["GIT_COMMITTER_DATE"] = iso_datetime
-            repo.index.add("**")
+            repo.index.add("problems/")
+            repo.index.add("README.md")
+            repo.index.add("submissions.json")
             repo.index.commit(commit_message)
             repo.git.push("origin")
             os.unsetenv("GIT_AUTHOR_DATE")
